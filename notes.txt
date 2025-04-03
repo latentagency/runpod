@@ -1,0 +1,57 @@
+cd /workspace/ComfyUI/models/unet
+wget https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q8_0.gguf?download=true
+wget https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-Q8_0.gguf?download=true
+
+cd /workspace/ComfyUI/models/lora
+wget -O Hyper-FLUX.1-dev-8steps-lora.safetensors https://civitai.com/api/download/models/949832
+
+cd /workspace/ComfyUI/models/clip
+wget https://huggingface.co/zer0int/CLIP-GmP-ViT-L-14/resolve/main/ViT-L-14-BEST-smooth-GmP-ft.safetensors
+
+cd /workspace/ComfyUI/models/vae
+wget https://huggingface.co/lovis93/testllm/resolve/ed9cf1af7465cebca4649157f118e331cf2a084f/ae.safetensors?download=true
+
+cd /workspace/ComfyUI/models/clip_vision
+wget https://huggingface.co/Comfy-Org/sigclip_vision_384/resolve/main/sigclip_vision_patch14_384.safetensors?download=true
+
+cd /workspace/ComfyUI/models/controlnet
+wget -O FLUX.1-dev-ControlNet-Union-Pro.safetensors https://huggingface.co/Shakker-Labs/FLUX.1-dev-ControlNet-Union-Pro/resolve/main/diffusion_pytorch_model.safetensors?download=true
+
+cd /workspace/ComfyUI/models/LLM
+wget https://huggingface.co/MiaoshouAI/Florence-2-large-PromptGen-v2.0
+
+cd /workspace/ComfyUI/models/sams
+wget https://huggingface.co/lkeab/hq-sam/resolve/main/sam_hq_vit_h.pth?download=true
+
+cd /workspace/ComfyUI/models/grounding-dino
+wget https://huggingface.co/ShilongLiu/GroundingDINO/blob/main/groundingdino_swint_ogc.pth
+
+
+
+
+
+
+Update handler.py and workflow.json accordingly. Rename if necessary
+
+These are relevant:
+Load Image:
+1231 Subject_image
+1531 Background_image
+
+Simple Math Slider Nodes:
+1088 X-Coordinate
+1089 Y-Coordinate
+2151 Z-Coordinate
+
+Seed:
+Seed 366745843974509
+Control_after_generate randomize - need to be able to select the different options
+
+Variation:
+791 VariationCount
+2134 VariationIntensity
+3914 ToggleCustomPrompt
+
+Consistency:
+3920 ProductConsistency
+3921 BackgroundConsistency
