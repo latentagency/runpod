@@ -2,53 +2,49 @@ import runpod
 import os
 import json
 import subprocess
-import base64
 import shutil
-from datetime import datetime
 
 # Define base directory for data (consistent with install.sh and entrypoint.sh)
 BASE_DIR = "/runpod-volume/workspace" if os.path.exists("/runpod-volume/workspace") else "/workspace"
 OUTPUT_DIR = f"{BASE_DIR}/comfyui/output"
-INPUT_DIR = f"{BASE_DIR}/comfyui/tmp/workflow_temp.json"
-
-# Define directories (use BASE_DIR for data, /workspace for static files)
-WORKFLOW_PATH = "/workspace/comfyui/workflow.json"
 TEMP_WORKFLOW_PATH = f"{BASE_DIR}/comfyui/tmp/workflow_temp.json"
-OUTPUT_DIR = f"{BASE_DIR}/comfyui/output"
-TEMP_DIR = f"{BASE_DIR}/comfyui/tmp"
+
+# Define directories
+WORKFLOW_PATH = "/workspace/comfyui/workflow.json"
 MAIN_PY_PATH = "/workspace/comfyui/main.py"
-INPUT_DIR_PATH = f"{BASE_DIR}/comfyui/input"
-EXAMPLES_DIR = "/workspace/comfyui/src/examples"
+TEMP_DIR = f"{BASE_DIR}/comfyui/tmp"
 
-# Define the node IDs for relevant nodes with default paths
-LOAD_IMAGE_NODES = {
-    "1231": {"param": "subject_image", "default": os.path.join(EXAMPLES_DIR, "subject.png")},
-    "1531": {"param": "background_image", "default": os.path.join(EXAMPLES_DIR, "background.png")}
+# Define node IDs and their parameters from the workflow
+CLIP_TEXT_NODES = {
+    "6": {"param": "positive_prompt", "default": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,"},
+    "7": {"param": "negative_prompt", "default": "text, watermark"}
 }
 
-SIMPLE_MATH_SLIDER_NODES = {
-    "1088": {"name": "x_coordinate", "output_index": 0, "type": "FLOAT"},
-    "1089": {"name": "y_coordinate", "output_index": 0, "type": "FLOAT"},
-    "2151": {"name": "z_coordinate", "output_index": 0, "type": "FLOAT"},
-    "2134": {"name": "variation_intensity", "output_index": 0, "type": "FLOAT"},
-    "3914": {"name": "toggle_custom_prompt", "output_index": 1, "type": "INT"},
-    "3920": {"name": "product_consistency", "output_index": 0, "type": "FLOAT"},
-    "3921": {"name": "background_consistency", "output_index": 0, "type": "FLOAT"}
+KSAMPLER_NODE = {
+    "3": {
+        "seed": "seed",
+        "steps": "steps",
+        "cfg": "cfg",
+        "sampler_name": "sampler_name",
+        "scheduler": "scheduler",
+        "denoise": "denoise"
+    }
 }
 
-SEED_NODE = {
-    "34": {"value_name": "seed", "mode_name": "seed_mode"}
+LATENT_IMAGE_NODE = {
+    "5": {
+        "width": "width",
+        "height": "height",
+        "batch_size": "batch_size"
+    }
 }
 
-VARIATION_COUNT_NODE = {
-    "791": "variation_count"
-}
-
-VALID_SEED_MODES = {"fixed", "increment", "decrement", "randomize"}
+VALID_SAMPLER_NAMES = {"euler", "euler_ancestral", "heun", "dpm_2", "dpm_fast", "dpm_adaptive", "dpmpp_2m", "dpmpp_sde"}
+VALID_SCHEDULERS = {"normal", "karras", "exponential", "simple"}
 
 def handler(event):
     # Version marker to confirm deployment
-    print("Handler version: 2025-03-25-v1", flush=True)
+    print("Handler version: 2025-04-03-v1", flush=True)
 
     # Load the workflow
     print(f"Loading workflow from {WORKFLOW_PATH}", flush=True)
@@ -63,75 +59,73 @@ def handler(event):
     input_data = event.get("input", {})
     print(f"Input data: {input_data}", flush=True)
 
-    # Ensure directories exist
+    # Ensure temp directory exists
     os.makedirs(TEMP_DIR, exist_ok=True)
-    os.makedirs(INPUT_DIR_PATH, exist_ok=True)
-    print(f"Directories ensured: {TEMP_DIR}, {INPUT_DIR_PATH}", flush=True)
+    print(f"Temp directory ensured: {TEMP_DIR}", flush=True)
 
-    # Update LoadImage nodes
-    for node_id, info in LOAD_IMAGE_NODES.items():
-        image_input = input_data.get(info["param"], info["default"])
-        if image_input:
-            for node in workflow["nodes"]:
-                if str(node["id"]) == node_id:
-                    if isinstance(image_input, str) and not image_input.startswith("data:image"):
-                        filename = os.path.basename(image_input)
-                        source_path = os.path.join(EXAMPLES_DIR, filename) if not os.path.isabs(image_input) else image_input
-                        input_path = os.path.join(INPUT_DIR_PATH, filename)
-                        print(f"Attempting to copy {source_path} to {input_path}", flush=True)
-                        if os.path.exists(source_path):
-                            shutil.copy(source_path, input_path)
-                            print(f"Successfully copied {source_path} to {input_path}", flush=True)
-                        else:
-                            print(f"Warning: Input file {source_path} not found, using default.", flush=True)
-                            shutil.copy(info["default"], input_path)
-                            print(f"Copied default {info['default']} to {input_path}", flush=True)
-                        node["widgets_values"][0] = filename
-                    elif isinstance(image_input, str) and image_input.startswith("data:image"):
-                        base64_data = image_input.split(",")[1]
-                        temp_filename = f"{info['param']}_{node_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                        temp_path = os.path.join(TEMP_DIR, temp_filename)
-                        with open(temp_path, "wb") as f:
-                            f.write(base64.b64decode(base64_data))
-                        input_path = os.path.join(INPUT_DIR_PATH, temp_filename)
-                        shutil.copy(temp_path, input_path)
-                        print(f"Copied base64 image to {input_path}", flush=True)
-                        node["widgets_values"][0] = temp_filename
-                    break
-
-    # Update SimpleMathSlider+ nodes
-    for node_id, info in SIMPLE_MATH_SLIDER_NODES.items():
-        value = input_data.get(info["name"])
-        if value is not None:
-            for node in workflow["nodes"]:
-                if str(node["id"]) == node_id:
-                    node["widgets_values"][0] = float(value) if info["type"] == "FLOAT" else int(value)
-                    print(f"Updated node {node_id} with value {value}", flush=True)
-                    break
-
-    # Update Seed node (value and mode)
-    for node_id, params in SEED_NODE.items():
-        seed_value = input_data.get(params["value_name"])
-        seed_mode = input_data.get(params["mode_name"])
+    # Update CLIPTextEncode nodes (positive and negative prompts)
+    for node_id, info in CLIP_TEXT_NODES.items():
+        prompt_input = input_data.get(info["param"], info["default"])
         for node in workflow["nodes"]:
             if str(node["id"]) == node_id:
-                if seed_value is not None:
-                    node["widgets_values"][0] = int(seed_value)
-                    print(f"Updated seed value for node {node_id} to {seed_value}", flush=True)
-                if seed_mode in VALID_SEED_MODES:
-                    node["widgets_values"][1] = seed_mode
-                    print(f"Updated seed mode for node {node_id} to {seed_mode}", flush=True)
+                node["widgets_values"][0] = prompt_input
+                print(f"Updated node {node_id} with prompt: {prompt_input}", flush=True)
                 break
 
-    # Update Variation Count node
-    for node_id, param_name in VARIATION_COUNT_NODE.items():
-        value = input_data.get(param_name)
-        if value is not None:
-            for node in workflow["nodes"]:
-                if str(node["id"]) == node_id:
-                    node["widgets_values"][0] = int(value)
-                    print(f"Updated variation count for node {node_id} to {value}", flush=True)
-                    break
+    # Update KSampler node (seed, steps, cfg, etc.)
+    for node_id, params in KSAMPLER_NODE.items():
+        for node in workflow["nodes"]:
+            if str(node["id"]) == node_id:
+                seed = input_data.get(params["seed"])
+                if seed is not None:
+                    node["widgets_values"][0] = int(seed)
+                    print(f"Updated seed for node {node_id} to {seed}", flush=True)
+                
+                steps = input_data.get(params["steps"])
+                if steps is not None:
+                    node["widgets_values"][2] = int(steps)
+                    print(f"Updated steps for node {node_id} to {steps}", flush=True)
+                
+                cfg = input_data.get(params["cfg"])
+                if cfg is not None:
+                    node["widgets_values"][3] = float(cfg)
+                    print(f"Updated cfg for node {node_id} to {cfg}", flush=True)
+                
+                sampler_name = input_data.get(params["sampler_name"])
+                if sampler_name in VALID_SAMPLER_NAMES:
+                    node["widgets_values"][4] = sampler_name
+                    print(f"Updated sampler_name for node {node_id} to {sampler_name}", flush=True)
+                
+                scheduler = input_data.get(params["scheduler"])
+                if scheduler in VALID_SCHEDULERS:
+                    node["widgets_values"][5] = scheduler
+                    print(f"Updated scheduler for node {node_id} to {scheduler}", flush=True)
+                
+                denoise = input_data.get(params["denoise"])
+                if denoise is not None:
+                    node["widgets_values"][6] = float(denoise)
+                    print(f"Updated denoise for node {node_id} to {denoise}", flush=True)
+                break
+
+    # Update EmptyLatentImage node (width, height, batch_size)
+    for node_id, params in LATENT_IMAGE_NODE.items():
+        for node in workflow["nodes"]:
+            if str(node["id"]) == node_id:
+                width = input_data.get(params["width"])
+                if width is not None:
+                    node["widgets_values"][0] = int(width)
+                    print(f"Updated width for node {node_id} to {width}", flush=True)
+                
+                height = input_data.get(params["height"])
+                if height is not None:
+                    node["widgets_values"][1] = int(height)
+                    print(f"Updated height for node {node_id} to {height}", flush=True)
+                
+                batch_size = input_data.get(params["batch_size"])
+                if batch_size is not None:
+                    node["widgets_values"][2] = int(batch_size)
+                    print(f"Updated batch_size for node {node_id} to {batch_size}", flush=True)
+                break
 
     # Save the modified workflow to a temporary file
     os.makedirs(os.path.dirname(TEMP_WORKFLOW_PATH), exist_ok=True)

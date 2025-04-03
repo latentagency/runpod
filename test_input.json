@@ -1,14 +1,15 @@
 {
   "input": {
-    "subject_image": "src/examples/subject.png",
-    "background_image": "src/examples/background.png",
-    "x_coordinate": 50,
-    "y_coordinate": 75,
-    "z_coordinate": 0.65,
-    "variation_intensity": 0.2,
-    "product_consistency": 0.4,
-    "background_consistency": 0.25,
+    "positive_prompt": "a serene lake with mountains, glowing bottle",
+    "negative_prompt": "blurry, low quality",
     "seed": 123456789,
-    "seed_mode": "fixed"
+    "steps": 25,
+    "cfg": 7.5,
+    "sampler_name": "euler",
+    "scheduler": "normal",
+    "denoise": 0.9,
+    "width": 768,
+    "height": 768,
+    "batch_size": 1
   }
 }
